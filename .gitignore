@@ -1,8 +1,13 @@
 *~
+*.egg-info
+*.egg-link
+*.iml
 *.pyc
 build
 dist
 .coverage
+.env
+.idea
 .project
 .pydevproject
 .settings
