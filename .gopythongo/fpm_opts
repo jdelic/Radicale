@@ -1,0 +1,11 @@
+-p radicale_{{debian_version.version}}.deb
+-n radicale
+--provides radicale
+-v "{{debian_version.version}}"
+-m "Jonas Maurus"
+-d python3
+-d python3-pip
+-d python3-virtualenv
+--directories "{{basedir}}"
+--directories /run/radicale
+{{basedir}}
