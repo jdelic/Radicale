@@ -8,4 +8,6 @@
 -d python3-virtualenv
 --directories "{{basedir}}"
 --directories /run/radicale
+--deb-systemd .gopythongo/etc/systemd/radicale.service
 {{basedir}}
+.gopythongo/etc/radicale/=/etc/radicale/
