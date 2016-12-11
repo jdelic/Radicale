@@ -1,0 +1,15 @@
+[Unit]
+Description=Radicale - A Python CalDAV and CardDAV server
+
+[Service]
+Type=simple
+User=radicale
+Group=radicale
+ExecStart=/opt/radicale/bin/radicale -p /run/radicale/radicale.pid -C /etc/radicale/config
+Restart=on-failure
+RestartSec=5s
+WorkingDirectory=/opt/radicale
+PIDFIle=/run/radicale/radicale.pid
+
+[Install]
+WantedBy=multi-user.target
