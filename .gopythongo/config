@@ -25,11 +25,6 @@ search-version-regex=VERSION = "([0-9]+\.[0-9]+\.[0-9]+\.?(dev|rc|pre|post)?)"
 version-parser=pep440
 version-action=bump-revision
 
-versioner=pymodule
-pymodule-read=radicale.VERSION
-version-parser=pep440
-version-action=bump-revision
-
 use-fpm=/usr/local/bin/fpm
 run-fpm=template:.gopythongo/fpm_opts
 
