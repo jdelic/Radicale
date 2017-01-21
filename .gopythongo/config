@@ -12,7 +12,7 @@ packer=fpm
 
 store=aptly
 use-aptly-vault-wrapper
-repo=maurusnet
+repo=mn-radicale
 aptly-config=/etc/aptly/aptly.conf
 aptly-distribution=jessie
 # reference for build server
