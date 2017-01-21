@@ -9,7 +9,7 @@ ExecStart=/opt/radicale/bin/radicale -p /run/radicale/radicale.pid -C /etc/radic
 Restart=on-failure
 RestartSec=5s
 WorkingDirectory=/opt/radicale
-PIDFIle=/run/radicale/radicale.pid
+PIDFile=/run/radicale/radicale.pid
 
 [Install]
 WantedBy=multi-user.target
