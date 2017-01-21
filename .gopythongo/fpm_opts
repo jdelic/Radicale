@@ -7,10 +7,14 @@
 -d python3-pip
 -d python3-virtualenv
 -d adduser
+--before-remove .gopythongo/pre_rm.sh
 --after-install .gopythongo/post_install.sh
+--after-remove .gopythongo/post_rm.sh
 --directories "{{basedir}}"
 --directories /run/radicale
---deb-systemd .gopythongo/etc/systemd/radicale.service
+# disabled --deb-systemd since FPM does not honor policy-rc.d in it's default scripts
+# --deb-systemd .gopythongo/etc/systemd/radicale.service
 {{basedir}}
 .gopythongo/etc/radicale/=/etc/radicale/
 .gopythongo/radicale.tmpfilesd.conf=/usr/lib/tmpfiles.d/radicale.conf
+.gopythongo/etc/systemd/radicale.service=/lib/systemd/system/radicale.service

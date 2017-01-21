@@ -19,6 +19,12 @@ aptly-distribution=jessie
 aptly-publish-opts="-config=/etc/aptly/aptly.conf -architectures=amd64 -keyring=/etc/gpg-managed-keyring/pubring.gpg -secret-keyring=/etc/gpg-managed-keyring/secring.gpg -gpg-key=DDB131CF1DF6A9CF8200799002CBD940A78049AF"
 aptly-publish-endpoint=s3:maurusnet:radicale
 
+versioner=searchfile
+search-version-in=radicale/__init__.py
+search-version-regex=VERSION = "([0-9]+\.[0-9]+\.[0-9]+\.?(dev|rc|pre|post)?)"
+version-parser=pep440
+version-action=bump-revision
+
 versioner=pymodule
 pymodule-read=radicale.VERSION
 version-parser=pep440
