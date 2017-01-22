@@ -8,8 +8,11 @@ Group=radicale
 ExecStart=/usr/local/radicale/bin/radicale -p /run/radicale/radicale.pid -C /etc/radicale/config
 Restart=on-failure
 RestartSec=5s
-WorkingDirectory=/opt/radicale
+WorkingDirectory=/usr/local/radicale
 PIDFile=/run/radicale/radicale.pid
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
 
 [Install]
 WantedBy=multi-user.target
