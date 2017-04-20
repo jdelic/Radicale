@@ -1,5 +1,5 @@
--p radicale_{{debian_version.version}}.deb
--n radicale
+-p radicale-mn_{{debian_version.version}}.deb
+-n radicale-mn
 --provides radicale
 -v "{{debian_version.version}}"
 -m "Jonas Maurus"
@@ -7,6 +7,8 @@
 -d python3-pip
 -d python3-virtualenv
 -d adduser
+# this package can't be used together with Debian's radicale package
+--conflicts radicale
 --before-remove .gopythongo/pre_rm.sh
 --after-install .gopythongo/post_install.sh
 --after-remove .gopythongo/post_rm.sh
