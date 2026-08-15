@@ -153,9 +153,12 @@ def free_busy_report(base_prefix: str, path: str, xml_request: Optional[ET.Eleme
     # Serialize a single VFREEBUSY for the whole query (rfc4791-7.10).
     # ``freebusy`` periods are sorted and adjacent or overlapping periods of
     # the same FBTYPE are coalesced.
-    periods.sort(key=lambda period: period[0])
+    periods.sort(key=lambda period: radicale_filter.date_to_datetime(
+        period[0]))
     merged_periods: List[Tuple[datetime.datetime, datetime.datetime, str]] = []
     for start, end, fbtype in periods:
+        # date_to_datetime always returns a datetime with tzinfo
+        # (assuming UTC for naive values), so astimezone is safe
         start_utc = radicale_filter.date_to_datetime(start).astimezone(
             datetime.timezone.utc)
         end_utc = radicale_filter.date_to_datetime(end).astimezone(
