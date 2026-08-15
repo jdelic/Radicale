@@ -1,6 +1,13 @@
 # Changelog
 
 ## 3.8.0.dev
+* Fix: free-busy REPORT now returns a RFC 4791 compliant response: a single VCALENDAR with one VFREEBUSY spanning the requested query range and busy periods as FREEBUSY properties with FBTYPE parameters instead of one VFREEBUSY per occurrence with a standalone FBTYPE property
+* Fix: free-busy REPORT no longer reports cancelled events as FBTYPE=FREE; cancelled and transparent events are omitted from busy time, and transparent events combined with STATUS:CANCELLED no longer crash with HTTP 500
+* Fix: free-busy REPORT rejects requests without a time-range or with a time-range whose end is not after its start with HTTP 400
+* Fix: free-busy REPORT applies [reporting] max_freebusy_occurrence to the total number of occurrences per collection without an off-by-one error
+* Fix: free-busy REPORT on a calendar object resource (instead of a calendar collection) is rejected with HTTP 403
+* Enhancement: advertise CALDAV:free-busy-query in DAV:supported-report-set of calendar collections
+* Test: cover TRANSP:OPAQUE/TRANSPARENT round-trips, free-busy response structure, TRANSP/STATUS classification, occurrence limits and free-busy discovery
 * Fix: storage/multifilesystem: depth:1 PROPFIND no longer re-runs the filesystem collision check (path_to_filesystem) for every item in a collection; this made listing large collections O(n^2) on file systems not detected as collision-free
 * Improve: storage/multifilesystem: avoid redundant stat() calls per item in get/upload when use_mtime_and_size_for_item_cache is enabled
 * Feature: [sharing] add sharing-by-group/realm
