@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.8.0.dev
+## 3.8.1.dev
 * Fix: free-busy REPORT now returns a RFC 4791 compliant response: a single VCALENDAR with one VFREEBUSY spanning the requested query range and busy periods as FREEBUSY properties with FBTYPE parameters instead of one VFREEBUSY per occurrence with a standalone FBTYPE property
 * Fix: free-busy REPORT no longer reports cancelled events as FBTYPE=FREE; cancelled and transparent events are omitted from busy time, and transparent events combined with STATUS:CANCELLED no longer crash with HTTP 500
 * Fix: free-busy REPORT rejects requests without a time-range or with a time-range whose end is not after its start with HTTP 400
@@ -8,13 +8,19 @@
 * Fix: free-busy REPORT on a calendar object resource (instead of a calendar collection) is rejected with HTTP 403
 * Enhancement: advertise CALDAV:free-busy-query in DAV:supported-report-set of calendar collections
 * Test: cover TRANSP:OPAQUE/TRANSPARENT round-trips, free-busy response structure, TRANSP/STATUS classification, occurrence limits and free-busy discovery
+
+## 3.8.0
 * Fix: storage/multifilesystem: depth:1 PROPFIND no longer re-runs the filesystem collision check (path_to_filesystem) for every item in a collection; this made listing large collections O(n^2) on file systems not detected as collision-free
 * Improve: storage/multifilesystem: avoid redundant stat() calls per item in get/upload when use_mtime_and_size_for_item_cache is enabled
 * Feature: [sharing] add sharing-by-group/realm
 * Feature: [group] with type "htgroup", "none", "from_auth" (NEW)
 * Extension: [auth] type "pam": set groups of user to be used later
 * Adjustment: reject usernames starting or ending with "@" or having more than one "@"
-* Adjustment: reject usernames containing ":"
+* Adjustment: reject usernames containing ":" or ","
+* Add: [group] group_collections_folder replacing hardcoded "GROUPS"
+* Fix: pathutils: detect missing permission to create symbolic link on Microsoft Windows
+* Fix: sharing-by-token: requests to dedicated items
+* Extension: [hook] add option for "smtp_password_file"
 
 ## 3.7.8
 * Fix: time-range filter on a VTODO having DTSTART/DUE and also CREATED/COMPLETED used the CREATED->COMPLETED duration instead of the DTSTART->DUE one, so completed tasks were missing from (or wrongly returned by) calendar-query REPORT results

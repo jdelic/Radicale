@@ -21,6 +21,7 @@ from typing import Union
 
 from radicale import sharing
 from radicale.log import logger
+from radicale.sharing import common
 
 """ File 'database' based sharing by token or map """
 
@@ -100,7 +101,7 @@ class Sharing(sharing.BaseSharing):
                 return None
             else:
                 # check by group
-                logger.trace("sharing/%s/get: no direct share found, run through filtered list")
+                logger.trace("sharing/%s/get: no direct share found, run through filtered list", ShareType)
                 for row in self.database_list_sharing(ShareType=ShareType, PathOrToken=PathOrToken, User=User):
                     if OnlyEnabled is True and row['EnabledByOwner'] is False:
                         continue
@@ -132,7 +133,7 @@ class Sharing(sharing.BaseSharing):
             if version != DB_VERSION:
                 return {"status": "error"}
 
-            if User is not None and row['User'] != User:
+            if User is not None and row['User'] != User.split(sharing.SHARING_SEPARATOR_GROUP)[0]:
                 return None
             elif OnlyEnabled is True and row['EnabledByOwner'] is not True:
                 return None
@@ -154,7 +155,7 @@ class Sharing(sharing.BaseSharing):
                 Conversion = row['Conversion']
             if 'Actions' in row:
                 Actions = row['Actions']
-            logger.trace("sharing: map %r to %r (Owner=%r User=%r Permissions=%r Hidden=%s Properties=%r)", PathOrToken, PathMapped, Owner, UserShare, Permissions, Hidden, Properties)
+            logger.trace("sharing/%s/get: map %r to %r (Owner=%r User=%r Permissions=%r Hidden=%s Properties=%r)", ShareType, PathOrToken, PathMapped, Owner, UserShare, Permissions, Hidden, Properties)
             return {
                     "mapped": True,
                     "ShareType": ShareType,
@@ -186,9 +187,9 @@ class Sharing(sharing.BaseSharing):
                               Conversion: Union[str, None] = None,
                               ) -> list[dict]:
         """ retrieve sharing """
-        result = []
+        result: list[dict] = []
 
-        logger.trace("sharing/list/called: ShareType=%r OwnerOrUser=%r User=%r PathOrToken=%r PathMapped=%r EnabledByOwner=%s EnabledByUser=%s HiddenByOwner=%s HiddenByUser=%s Conversion=%r", ShareType, OwnerOrUser, User, PathOrToken, PathMapped, EnabledByOwner, EnabledByUser, HiddenByOwner, HiddenByUser, Conversion)
+        logger.trace("sharing/%s/list: OwnerOrUser=%r User=%r PathOrToken=%r PathMapped=%r EnabledByOwner=%s EnabledByUser=%s HiddenByOwner=%s HiddenByUser=%s Conversion=%r", ShareType, OwnerOrUser, User, PathOrToken, PathMapped, EnabledByOwner, EnabledByUser, HiddenByOwner, HiddenByUser, Conversion)
 
         for _ShareType in sharing.SHARE_TYPES_V1:
             if ShareType is not None and _ShareType != ShareType:
@@ -201,7 +202,7 @@ class Sharing(sharing.BaseSharing):
                     if not entry.is_file():
                         continue
 
-                    logger.trace("sharing/list: check file: %r", entry.name)
+                    logger.trace("sharing/%s/list: check file: %r", ShareType, entry.name)
                     # read file
                     with open(entry, "rb") as fb:
                         (version, row) = pickle.load(fb)
@@ -210,80 +211,26 @@ class Sharing(sharing.BaseSharing):
                         # skip
                         continue
 
-                    logger.trace("sharing/list/row: test: %r", row)
+                    logger.trace("sharing/%s/list/row: test: %r", ShareType, row)
 
-                    if ShareType is not None and row['ShareType'] != ShareType:
-                        continue
-                    if Conversion is not None and row['Conversion'] != Conversion:
-                        continue
-                    if EnabledByOwner is not None and row['EnabledByOwner'] != EnabledByOwner:
-                        continue
-                    if EnabledByUser is not None and row['EnabledByUser'] != EnabledByUser:
-                        continue
-                    if HiddenByOwner is not None and row['HiddenByOwner'] != HiddenByOwner:
-                        continue
-                    if HiddenByUser is not None and row['HiddenByUser'] != HiddenByUser:
-                        continue
-                    if PathMapped is not None and row['PathMapped'] != PathMapped:
-                        continue
-                    if OwnerOrUser is not None:
-                        if User is not None and OwnerOrUser == User:
-                            pass  # will be checked below
-                        elif (row['Owner'] != OwnerOrUser) and (row['User'] != OwnerOrUser):
-                            continue
+                    row_match = common.database_common_check_row_match(
+                                                                row=row,
+                                                                OwnerOrUser=OwnerOrUser,
+                                                                ShareType=ShareType,
+                                                                PathOrToken=PathOrToken,
+                                                                PathMapped=PathMapped,
+                                                                User=User,
+                                                                EnabledByOwner=EnabledByOwner,
+                                                                EnabledByUser=EnabledByUser,
+                                                                HiddenByOwner=HiddenByOwner,
+                                                                HiddenByUser=HiddenByUser,
+                                                                Conversion=Conversion,
+                                                                )
 
-                    group_check = False
-                    if row['User'].startswith(sharing.SHARING_SEPARATOR_GROUP) or row['User'].startswith(sharing.SHARING_SEPARATOR_REALM):
-                        group_check = True
+                    if row_match is not None:
+                        result.append(row_match)
 
-                    if User is not None:
-                        if row['User'].startswith(sharing.SHARING_SEPARATOR_REALM):
-                            if not User.endswith(row['User']):
-                                continue
-                        elif row['User'].startswith(sharing.SHARING_SEPARATOR_GROUP):
-                            if sharing.SHARING_SEPARATOR_GROUP not in User:
-                                continue  # user has no group
-                            user_without_group = User.split(sharing.SHARING_SEPARATOR_GROUP)[0]
-                            groups_of_user = User.split(sharing.SHARING_SEPARATOR_GROUP)[1].split(',')
-                            Groups = row['User'].removeprefix(sharing.SHARING_SEPARATOR_GROUP).split(',')
-                            logger.trace("sharing/list/check/groups: groups_of_user=%r Groups=%r", groups_of_user, Groups)
-                            found = False
-                            for group in groups_of_user:
-                                if group in Groups:
-                                    found = True
-                                    break
-                            if found:
-                                pass
-                            else:
-                                continue
-                        elif row['User'] == User:
-                            pass
-                        else:
-                            continue
-                            if group_check and User.endswith(row['User']):
-                                pass
-                            elif row['User'] == User:
-                                pass
-                            else:
-                                continue
-
-                    row_copy = row.copy()
-
-                    if group_check and User is not None:
-                        if row['User'].startswith(sharing.SHARING_SEPARATOR_GROUP):
-                            user_without_group = User.split(sharing.SHARING_SEPARATOR_GROUP)[0]
-                        else:
-                            user_without_group = User
-                        row_copy['PathOrToken'] = row['PathOrToken'].replace("{user}", user_without_group)  # replace placeholder
-                        row_copy['User'] = user_without_group  # replace with real user
-
-                    if PathOrToken is not None and row_copy['PathOrToken'] != PathOrToken:
-                        continue
-
-                    logger.trace("sharing/list/row: add : %r", row_copy)
-                    result.append(row_copy)
-
-        return result
+        return common.database_common_filter_resolved_duplicate_shares(result)
 
     def database_create_sharing(self,
                                 ShareType: str,

@@ -498,6 +498,10 @@ DEFAULT_CONFIG_SCHEMA: types.CONFIG_SCHEMA = OrderedDict([
             "value": "False",
             "help": "enable caching of htgroup file",
             "type": bool}),
+        ("group_collections_folder", {
+            "value": "GROUPS",
+            "help": "folder under collection_root_folder containing collections of base64 encoded group names",
+            "type": str}),
     ])),
     ("rights", OrderedDict([
         ("type", {
@@ -684,11 +688,15 @@ DEFAULT_CONFIG_SCHEMA: types.CONFIG_SCHEMA = OrderedDict([
             "type": str}),
         ("smtp_password", {
             "value": "",
-            "help": "SMTP server password",
+            "help": "SMTP server password (prefer smtp_password_file for secrets)",
+            "type": str}),
+        ("smtp_password_file", {
+            "value": "",
+            "help": "Path of the file containing the SMTP server password",
             "type": str}),
         ("from_email", {
             "value": "",
-            "help": "SMTP server password",
+            "help": "Email address to use as sender in email notifications",
             "type": str}),
         ("mass_email", {
             "value": "False",

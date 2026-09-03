@@ -27,8 +27,8 @@ from http import client
 from typing import Any, Sequence, Union
 from urllib.parse import parse_qs
 
-from radicale import (config, httputils, item, pathutils, rights, storage,
-                      types, utils)
+from radicale import (config, group, httputils, item, pathutils, rights,
+                      storage, types, utils)
 from radicale.log import logger
 
 INTERNAL_TYPES: Sequence[str] = ("csv", "files", "none")
@@ -241,6 +241,7 @@ class BaseSharing:
         self.configuration = configuration
         self._rights = rights.load(configuration)
         self._storage = storage.load(configuration)
+        self._group = group.load(configuration)
         self._auth_delay = configuration.get("auth", "delay")
         self._encoding = configuration.get("encoding", "stock")
         self._validate_user_value = configuration.get("server", "validate_user_value")
@@ -461,11 +462,15 @@ class BaseSharing:
         if not self.sharing_collection_by_map:
             logger.trace("sharing/map: not active")
         else:
+            user_lookup = User
+            if User and self._rights._user_groups is not None and len(self._rights._user_groups) > 0:
+                user_lookup = User + SHARING_SEPARATOR_GROUP + ",".join(self._rights._user_groups)
+
             # retrieve collections depending on filter
             sharing_collection_list += self.database_list_sharing(
                 ShareType="map",
-                OwnerOrUser=User,
-                User=User,
+                OwnerOrUser=user_lookup,
+                User=user_lookup,
                 EnabledByOwner=Enabled,
                 EnabledByUser=Enabled,
                 HiddenByOwner=Hidden,
@@ -596,10 +601,10 @@ class BaseSharing:
         if self.sharing_collection_by_token:
             logger.trace("sharing/token/resolver: check path: %r", path)
             if path.startswith("/.token/"):
-                pattern = re.compile('^(/\\.token/' + TOKEN_PATTERN_V1 + '/)$')
+                pattern = re.compile('^(/\\.token/' + TOKEN_PATTERN_V1 + '/)')
                 match = pattern.match(path)
                 if not match:
-                    logger.trace("sharing/token/resolver: unsupported token: %r", path)
+                    logger.notice("sharing/token/resolver: unsupported token: %r", path)
                     return {'error': 'token-not-supported'}
                 else:
                     # TODO add token validity checks
@@ -616,6 +621,10 @@ class BaseSharing:
                     if result['EnabledByOwner'] is not True:
                         logger.info("sharing/%s: resolved path %r->%r, User=%r not enabled by owner", "token", path, result['PathMapped'], result['Owner'])
                         return {'error': 'token-not-enabled'}
+
+                    path_suffix = path.removeprefix(match[1])
+                    if path_suffix:
+                        result['PathMapped'] = result['PathMapped'] + path_suffix
 
                     logger.info("sharing/%s: resolved %r->%r, User=%r, Permissions=%r Conversion=%r", "token", path, result['PathMapped'], result['Owner'], result['Permissions'], result['Conversion'])
                     return result
@@ -745,6 +754,9 @@ class BaseSharing:
         if user == "":
             # anonymous users are not allowed
             return httputils.NOT_ALLOWED
+
+        if user:
+            self._rights._user_groups = self._group.groups(user)
 
         # supported API version check
         if not path.startswith("/.sharing/v1/"):
@@ -1018,6 +1030,15 @@ class BaseSharing:
                 logger.warning(api_info + ": API is not enabled")
                 return httputils.NOT_FOUND
 
+        user_lookup = user
+        user_with_group_or_realm: bool = False
+        if user:
+            if self._rights._user_groups is not None and len(self._rights._user_groups) > 0:
+                user_lookup = user + SHARING_SEPARATOR_GROUP + ",".join(self._rights._user_groups)
+                user_with_group_or_realm = True
+            if SHARING_SEPARATOR_REALM in user_lookup:
+                user_with_group_or_realm = True
+
         # action: list
         if action == "list":
             logger.trace("" + api_info + ": start")
@@ -1028,14 +1049,14 @@ class BaseSharing:
             if ShareType != "all":
                 result_array = self.database_list_sharing(
                         ShareType=ShareType,
-                        OwnerOrUser=user,
+                        OwnerOrUser=user_lookup,
                         PathMapped=PathMapped,
                         PathOrToken=PathOrToken,
                         Conversion=Conversion,
                         )
             else:
                 result_array = self.database_list_sharing(
-                        OwnerOrUser=user,
+                        OwnerOrUser=user_lookup,
                         PathMapped=PathMapped,
                         PathOrToken=PathOrToken,
                         Conversion=Conversion,
@@ -1193,6 +1214,10 @@ class BaseSharing:
                         logger.warning(api_info + ": PathOrToken=%r has to start with placeholder for 'user' using group User=%r", PathOrToken, User)
                         return httputils.NOT_ALLOWED
                 else:
+                    if PathOrToken.startswith("/{user}/"):
+                        # placeholder exists
+                        logger.warning(api_info + ": PathOrToken=%r starts with placeholder for 'user' without group User=%r", PathOrToken, User)
+                        return httputils.NOT_ALLOWED
                     access = Access(self._rights, User, PathOrToken)
                     if not access.check("r"):
                         logger.warning(api_info + ": access to PathOrToken=%r not allowed for User=%r", PathOrToken, User)
@@ -1214,7 +1239,7 @@ class BaseSharing:
                     if rights.intersect(Permissions, "EP"):
                         logger.warning(api_info + ": PathMapped=%r Permissions=%r not supported for share-by-group/realm", PathMapped, Permissions)
                         return httputils.bad_request("Permissions are not supported for conversion: %r" % Permissions)
-                    Permissions = rights.add(Permissions, "ep")  # enforce permissions for group
+                    Permissions = rights.add(Permissions, "epu")  # enforce permissions for group including flag
 
                 logger.trace("" + api_info + ": %r (Permissions=%r PathOrToken=%r Owner=%r User=%r)", PathMapped, Permissions, PathOrToken, user, User)
 
@@ -1275,7 +1300,18 @@ class BaseSharing:
             # retrieve existing share
             share = self.database_get_sharing(ShareType=ShareType, PathOrToken=PathOrToken, OnlyEnabled=False)
             if share is None:
-                return httputils.NOT_FOUND
+                if user_with_group_or_realm:
+                    # retry with user (resolving share-by-group/realm)
+                    logger.trace(api_info + ": no share found, retry with user to resolve shared-by-group/realm")
+                    share = self.database_get_sharing(ShareType=ShareType, PathOrToken=PathOrToken, User=user_lookup, OnlyEnabled=False)
+                    if share is None:
+                        return httputils.NOT_FOUND
+                    else:
+                        # update not supported on shared-by-group/realm
+                        logger.warning(api_info + ": %r by user %r not supported for shared-by-group/realm", PathOrToken, user_lookup)
+                        return httputils.NOT_ALLOWED
+                else:
+                    return httputils.NOT_FOUND
 
             if 'Properties' in request_data:
                 if Properties is None:
@@ -1342,7 +1378,7 @@ class BaseSharing:
                     if rights.intersect(Permissions, "EP"):
                         logger.warning(api_info + ": PathMapped=%r Permissions=%r not supported for share-by-group/realm", PathMapped, Permissions)
                         return httputils.bad_request("Permissions are not supported for share-by-group/realm: %r" % Permissions)
-                    Permissions = rights.add(Permissions, "ep")  # enforce permissions for group
+                    Permissions = rights.add(Permissions, "epu")  # enforce permissions for group
 
             if user == share['Owner']:
                 if PathMapped is not None:
@@ -1495,7 +1531,7 @@ class BaseSharing:
 
         # action: TOGGLE
         elif action in API_SHARE_TOGGLES_V1:
-            logger.trace("sharing/API/POST/" + action)
+            logger.trace(api_info)
 
             if ShareType not in SHARE_TYPES_V1:
                 logger.warning(api_info + ": unsupported for ShareType=%r", ShareType)
@@ -1508,7 +1544,18 @@ class BaseSharing:
 
             share = self.database_get_sharing(ShareType=ShareType, PathOrToken=PathOrToken, OnlyEnabled=False)
             if share is None:
-                return httputils.NOT_FOUND
+                if user_with_group_or_realm:
+                    # retry with user (resolving share-by-group/realm)
+                    logger.trace(api_info + ": no share found, retry with user to resolve shared-by-group/realm")
+                    share = self.database_get_sharing(ShareType=ShareType, PathOrToken=PathOrToken, User=user_lookup, OnlyEnabled=False)
+                    if share is None:
+                        return httputils.NOT_FOUND
+                    else:
+                        # update not supported on shared-by-group/realm
+                        logger.warning(api_info + ": %r by user %r not supported for shared-by-group/realm", PathOrToken, user_lookup)
+                        return httputils.NOT_ALLOWED
+                else:
+                    return httputils.NOT_FOUND
 
             Enabled = None
             Hidden = None

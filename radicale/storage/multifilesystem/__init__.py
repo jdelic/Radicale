@@ -2,7 +2,7 @@
 # Copyright © 2014 Jean-Marc Martins
 # Copyright © 2012-2017 Guillaume Ayoub
 # Copyright © 2017-2021 Unrud <unrud@outlook.com>
-# Copyright © 2024-2025 Peter Bieringer <pb@bieringer.de>
+# Copyright © 2024-2026 Peter Bieringer <pb@bieringer.de>
 #
 # This library is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -203,7 +203,14 @@ class Storage(
                 if self._use_mtime_and_size_for_item_cache is False:
                     logger.info("Storage cache using mtime and size for 'item' may be an option in case of performance issues")
         except PermissionError as e:
-            logger.error("Directory permissions: %s / Effective user: %s", pathutils.path_permissions_as_string(self._get_collection_root_folder()), utils.user_groups_as_string())
+            logger.error(
+                "Permission denied while accessing storage path %r. "
+                "Check that [storage] filesystem_folder matches a writable container/volume mount "
+                "and is owned by the radicale user. Directory permissions: %s / Effective user: %s",
+                self._get_collection_root_folder(),
+                pathutils.path_permissions_as_string(self._get_collection_root_folder()),
+                utils.user_groups_as_string(),
+            )
             raise e
         except Exception:
             logger.warning("Storage item mtime resolution test result not successful")
@@ -214,3 +221,8 @@ class Storage(
                 logger.warning("Storage cache subfolder: %r does not exist, creating now", self._get_collection_cache_folder())
                 self._makedirs_synced(self._get_collection_cache_folder())
             logger.info("Storage cache subfolder permissions: %s", pathutils.path_permissions_as_string(self._get_collection_cache_folder()))
+        if is_collision_free_case_sensitive or self._group_collections_folder is None or len(self._group_collections_folder) == 0:
+            logger.info("Group collections folder: %r", self._group_collections_folder)
+        else:
+            logger.warning("Group collections folder disabled, file system is not case-sensitive: %r", self._group_collections_folder)
+            self._group_collections_folder = ""

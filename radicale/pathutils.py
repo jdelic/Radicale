@@ -389,6 +389,9 @@ def path_supports_symlink(path):
         os.symlink(test_dir1, test_dir2)
     except PermissionError:
         result = False
+    except OSError:
+        # Microsoft Windows in case of missing permission "Create symbolic links"
+        result = False
     else:
         # cleanup
         os.remove(test_dir2)

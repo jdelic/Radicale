@@ -297,36 +297,8 @@ mkdir -p /var/cache/radicale && chown -R radicale:radicale /var/cache/radicale
 > chmod -R o= /var/lib/radicale/collections
 > ```
 
-Create the file `/etc/systemd/system/radicale.service`:
-
-```ini
-[Unit]
-Description=A simple CalDAV (calendar) and CardDAV (contact) server
-After=network.target
-Requires=network.target
-
-[Service]
-ExecStart=/usr/bin/env python3 -m radicale
-Restart=on-failure
-User=radicale
-# Deny other users access to the calendar data
-UMask=0027
-# Optional security settings
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-PrivateDevices=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
-NoNewPrivileges=true
-ReadWritePaths=/var/lib/radicale/
-# Replace with following in case dedicated cache folder should be used
-#ReadWritePaths=/var/lib/radicale/ /var/cache/radicale/
-
-[Install]
-WantedBy=multi-user.target
-```
+Copy the example file `radicale.service` from sub-directory `contrib/systemd`
+to `/etc/systemd/system/radicale.service` and modify to your local needs if required.
 
 In this system-wide implementation, Radicale will load the configuration from the file `/etc/radicale/config`.
 
@@ -1257,11 +1229,6 @@ For DN-valued attributes, the value of the RDN is used to determine the group na
 The implementation also supports non-DN-valued attributes: their values are taken directly.
 
 The user's group names can be used later to define rights.
-They also give you access to the group calendars, if those exist.
-* Group calendars are placed directly under *collection_root_folder*`/GROUPS/`
-  with the base64-encoded group name as the calendar folder name.
-* Group calendar folders are not created automatically.
-  This must be done manually. In the [LDAP-authentication section of Radicale's wiki](https://github.com/Kozea/Radicale/wiki/LDAP-authentication) you can find a script to create a group calendar.
 
 Default: (unset)
 
@@ -1504,6 +1471,12 @@ Default: `False`
 
 _(>= 3.8.0)_
 
+User's group membership also give you access to group collections, if those exist.
+* Group collections are placed directly under *collection_root_folder*`/GROUPS/`
+  with the base64-encoded group name as the collection folder name.
+* Group collections folders are not created automatically.
+  This must be done manually. In the [LDAP-authentication section of Radicale's wiki](https://github.com/Kozea/Radicale/wiki/LDAP-authentication) you can find a script to create a group calendar.
+
 ##### type
 
 The method to lookup groups for username
@@ -1538,6 +1511,18 @@ _(>= 3.8.0)_
 Enable caching of htgroup file based on size and mtime_ns
 
 Default: `False`
+
+##### group_collections_folder
+
+_(>= 3.8.0)_
+
+Folder under *collection_root_folder* containing collections of base64 encoded group names _(>= 3.3.0)_
+
+Default: `GROUPS`
+
+Unset if not required or unwanted
+
+Note: only supported on case-sensitive file systems
 
 #### [rights]
 
@@ -2134,6 +2119,16 @@ _(>= 3.5.5)_
 
 Password to authenticate with SMTP server.
 Leave empty to disable authentication (e.g. using local mail server).
+Prefer `smtp_password_file` when deploying with a secrets manager.
+
+Default: (unset)
+
+##### smtp_password_file
+
+_(>= 3.8.0)_
+
+Path of a file containing the SMTP server password (for example `/run/secrets/smtp_password`).
+When set, the file contents are used instead of `smtp_password` (trailing newlines are stripped).
 
 Default: (unset)
 
