@@ -367,6 +367,7 @@ def xml_propfind_response(
                 elif collection.tag == "VCALENDAR" or share_bday_automap:
                     reports.append("C:calendar-multiget")
                     reports.append("C:calendar-query")
+                    reports.append("C:free-busy-query")
             for human_tag in reports:
                 supported_report = ET.Element(
                     xmlutils.make_clark("D:supported-report"))

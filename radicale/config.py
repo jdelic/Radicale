@@ -846,7 +846,7 @@ This is an automated message. Please do not reply.""",
             "type": positive_int}),
         ("max_freebusy_occurrence", {
             "value": "10000",
-            "help": "number of free-busy occurrences per event when reporting",
+            "help": "number of free-busy occurrences per collection when reporting",
             "type": positive_int})]))
     ])
 

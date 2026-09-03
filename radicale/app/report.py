@@ -61,13 +61,21 @@ def free_busy_report(base_prefix: str, path: str, xml_request: Optional[ET.Eleme
         return client.MULTI_STATUS, multistatus
     root = xml_request
     if (root.tag == xmlutils.make_clark("C:free-busy-query") and
-            collection.tag != "VCALENDAR"):
+            (collection.tag != "VCALENDAR" or
+             pathutils.strip_path(path) != collection.path)):
         logger.warning("Invalid REPORT method %r on %r requested",
                        xmlutils.make_human_tag(root.tag), path)
         return client.FORBIDDEN, xmlutils.webdav_error("D:supported-report")
 
     time_range_element = root.find(xmlutils.make_clark("C:time-range"))
-    assert isinstance(time_range_element, ET.Element)
+    if not isinstance(time_range_element, ET.Element):
+        raise ValueError("Missing time-range in free-busy-query")
+    query_start, query_end = radicale_filter.parse_time_range(
+        time_range_element)
+    if query_end <= query_start:
+        raise ValueError("Invalid time-range in free-busy-query: "
+                         "end %r is not after start %r" %
+                         (query_end, query_start))
 
     # Build a single filter from the free busy query for retrieval
     # TODO: filter for VFREEBUSY in additional to VEVENT but
@@ -89,6 +97,8 @@ def free_busy_report(base_prefix: str, path: str, xml_request: Optional[ET.Eleme
 
     cal = vobject.iCalendar()
     collection_tag = collection.tag
+    periods: List[Tuple[datetime.datetime, datetime.datetime, str]] = []
+    total_occurrences = 0
     while retrieved_items:
         # Second filtering before evaluating occurrences.
         # ``item.vobject_item`` might be accessed during filtering.
@@ -116,33 +126,61 @@ def free_busy_report(base_prefix: str, path: str, xml_request: Optional[ET.Eleme
             if not status or status.value == 'CONFIRMED':
                 fbtype = 'BUSY'
             elif status.value == 'CANCELLED':
-                fbtype = 'FREE'
+                # Cancelled events do not contribute to busy time
+                continue
             elif status.value == 'TENTATIVE':
                 fbtype = 'BUSY-TENTATIVE'
             else:
                 # Could do fbtype = status.value for x-name, I prefer this
                 fbtype = 'BUSY'
 
-        # TODO: coalesce overlapping periods
-
         if max_occurrence > 0:
-            n_occurrences = max_occurrence+1
+            n_occurrences = max_occurrence - total_occurrences + 1
         else:
             n_occurrences = 0
         occurrences = radicale_filter.time_range_fill(item.vobject_item,
                                                       time_range_element,
                                                       "VEVENT",
                                                       n=n_occurrences)
-        if max_occurrence > 0 and len(occurrences) >= max_occurrence:
+        total_occurrences += len(occurrences)
+        if max_occurrence > 0 and total_occurrences > max_occurrence:
             raise ValueError("FREEBUSY occurrences limit of {} hit"
                              .format(max_occurrence))
 
         for occurrence in occurrences:
-            vfb = cal.add('vfreebusy')
-            vfb.add('dtstamp').value = item.vobject_item.vevent.dtstamp.value
-            vfb.add('dtstart').value, vfb.add('dtend').value = occurrence
-            if fbtype:
-                vfb.add('fbtype').value = fbtype
+            periods.append((occurrence[0], occurrence[1], fbtype or 'BUSY'))
+
+    # Serialize a single VFREEBUSY for the whole query (rfc4791-7.10).
+    # ``freebusy`` periods are sorted and adjacent or overlapping periods of
+    # the same FBTYPE are coalesced.
+    periods.sort(key=lambda period: radicale_filter.date_to_datetime(
+        period[0]))
+    merged_periods: List[Tuple[datetime.datetime, datetime.datetime, str]] = []
+    for start, end, fbtype in periods:
+        # date_to_datetime always returns a datetime with tzinfo
+        # (assuming UTC for naive values), so astimezone is safe
+        start_utc = radicale_filter.date_to_datetime(start).astimezone(
+            datetime.timezone.utc)
+        end_utc = radicale_filter.date_to_datetime(end).astimezone(
+            datetime.timezone.utc)
+        if (merged_periods and merged_periods[-1][2] == fbtype and
+                start_utc <= merged_periods[-1][1]):
+            previous = merged_periods[-1]
+            merged_periods[-1] = (previous[0], max(previous[1], end_utc),
+                                  fbtype)
+        else:
+            merged_periods.append((start_utc, end_utc, fbtype))
+
+    vfb = cal.add('vfreebusy')
+    vfb.add('dtstamp').value = datetime.datetime.now(vobject.icalendar.utc)
+    vfb.add('dtstart').value = query_start.replace(tzinfo=vobject.icalendar.utc)
+    vfb.add('dtend').value = query_end.replace(tzinfo=vobject.icalendar.utc)
+    for start, end, fbtype in merged_periods:
+        freebusy = vfb.add('freebusy')
+        if fbtype != 'BUSY':
+            freebusy.params['FBTYPE'] = [fbtype]
+        freebusy.value = [(start.replace(tzinfo=vobject.icalendar.utc),
+                           end.replace(tzinfo=vobject.icalendar.utc))]
     return (client.OK, cal.serialize())
 
 
